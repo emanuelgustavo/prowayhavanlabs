@@ -1,61 +1,31 @@
-import express, { request } from 'express';
+import express from 'express';
 
 import knex from './database/connection';
 
 import CurrencyController from './controllers/currencyController';
+import OperationsController from './controllers/operationsController';
 
 const routes = express();
 
 const currencyController = new CurrencyController();
+const operationsController = new OperationsController();
 
 //rota para carregar lista de operações na pagina principal
-routes.get('/listalloperations', async (request, response) => {
-  const operations = await knex('operations').select('*');
-  return response.json(operations);
-});
+routes.get('/listalloperations', operationsController.index);
 
 //rota para somar valor total de operações
-routes.get('/sumalloperations', async (request, response) => {
-  const sumalloperations = await knex('operations').sum('value');
-  return response.json({"valor total": sumalloperations});
-})
+routes.get('/sumalloperations', operationsController.sumAllOperations);
 
-//rota para somar valor total de operações
-routes.get('/sumalltaxoperations', async (request, response) => {
-  const sumalloperations = await knex('operations').sum('tax');
-  return response.json({"valor total taxas": sumalloperations});
-})
+//rota para somar valor total de taxa das operações
+routes.get('/sumalltaxoperations', operationsController.sumAllOperationsTax);
 
 //rota para cadastrar nova operação
-routes.post('/newoperation', async (request, response) => {
-  const {
-    client_name,
-    from_currency_id,
-    to_currency_id,
-    date,
-    value
-  } = request.body;
-
-  await knex('operations').insert({
-    client_name,
-    from_currency_id,
-    to_currency_id,
-    date,
-    value,
-    result: 100.00, // p/ teste
-    tax: 10.00 // p/ teste
-  });
-
-  console.log(request.body)
-  return response.json({ success: true, data: request.body })
-});
+routes.post('/newoperation', operationsController.addNewOperation);
 
 //rota para relatorios
-routes.get('/operationsreport', async (request, response) => {
+//filtrado pelo cliente
+routes.get('/operationsreportbyname', async (request, response) => {
   const filterClient = request.query.client_name;
-  const filterFromDate = request.query.date_from;
-  const filterToDate = request.query.date_to;
-  const filterEspecificDate = request.query.date;
 
   console.log(request.query);
 
@@ -63,6 +33,48 @@ routes.get('/operationsreport', async (request, response) => {
     .where({
       client_name: filterClient
     })
+    .select('*');
+  
+  return response.json(filteredOperations);
+});
+
+//filtrado por data especifica
+routes.get('/operationsreportbydate', async (request, response) => {
+  const filterSpecificDate = request.query.date;
+
+  const filteredOperations = await knex('operations')
+    .where({
+      date: filterSpecificDate
+    })
+    .select('*');
+  
+  return response.json(filteredOperations);
+});
+
+//filtrado por data periodo
+routes.get('/operationsreportbyperiod', async (request, response) => {
+  const fromDatePeriod = String(request.query.from_date_period);
+  const toDatePeriod = String(request.query.to_date_period);
+
+  const filteredOperations = await knex('operations')
+    .where(function () {
+      this.where('date', '>=', fromDatePeriod)
+      .andWhere('date', '<=', toDatePeriod)
+    })
+    .select('*');
+  
+  return response.json(filteredOperations);
+});
+
+//filtrado por nome e periodo
+routes.get('/operationsreportbynameandperiod', async (request, response) => {
+  const fromDatePeriod = String(request.query.from_date_period);
+  const toDatePeriod = String(request.query.to_date_period);
+  const nameFilter = String(request.query.client_name);
+
+  const filteredOperations = await knex('operations')
+    .whereBetween('date', [fromDatePeriod, toDatePeriod])
+    .andWhere('client_name', nameFilter)
     .select('*');
   
   return response.json(filteredOperations);
